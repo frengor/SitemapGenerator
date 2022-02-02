@@ -1,7 +1,4 @@
-use hyper::Body;
 use hyper::client::connect::Connect;
-
-pub type Client<T> = hyper::Client<T, Body>;
 
 /// Utility trait to apply trait bounds to generic parameters in functions which takes a `Client`.
 ///
