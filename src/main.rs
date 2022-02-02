@@ -12,6 +12,7 @@ use hyper_tls::HttpsConnector;
 use scraper::Selector;
 use tokio::sync::{mpsc, oneshot, Semaphore, SemaphorePermit};
 use tokio::sync::mpsc::Sender;
+use tokio::task::yield_now;
 
 pub use crate::processing::process;
 pub use crate::utils::*;
@@ -144,6 +145,9 @@ fn spawn_task<T: ClientBounds>(task_info: StartTaskInfo<T>, permit: SemaphorePer
                 },
             }
         };
+
+        // We've been busy
+        yield_now().await;
 
         if let Some(links) = links {
             stream::iter(links)
