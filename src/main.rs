@@ -1,35 +1,31 @@
 #![allow(non_snake_case)]
 
 use std::collections::HashSet;
-use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use futures::{FutureExt, stream, StreamExt};
 use futures::future::BoxFuture;
-use hyper::Body;
 use hyper_tls::HttpsConnector;
-use scraper::Selector;
+use tokio::io::{AsyncWriteExt, stderr};
 use tokio::sync::{mpsc, oneshot, Semaphore, SemaphorePermit};
-use tokio::sync::mpsc::Sender;
-use tokio::task::yield_now;
 
 pub use crate::processing::process;
+pub use crate::types::*;
 pub use crate::utils::*;
 
 mod utils;
 mod processing;
+mod types;
 
-pub type Client<T> = hyper::Client<T, Body>;
-
-const CONCURRENT_TASKS: usize = 20;
+const CONCURRENT_TASKS: usize = 64;
 
 static SEM: Semaphore = Semaphore::const_new(CONCURRENT_TASKS);
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::builder().build(HttpsConnector::new());
-    let (tx, mut rx) = mpsc::channel(64);
+    let (tx, mut rx) = mpsc::channel(CONCURRENT_TASKS);
 
     let sites_to_analyze = vec![
         "185.25.204.194",
@@ -53,7 +49,7 @@ async fn main() -> Result<()> {
             let permit = SEM.acquire().await?;
             // The call to tokio::spawn avoids deadlock
             tokio::spawn(async move {
-                spawn_task(StartTaskInfo { site, tx, client }, permit).await;
+                print_err(spawn_task(StartTaskInfo { site, tx, client }, permit).await).await;
             });
         }
     }
@@ -71,7 +67,7 @@ async fn main() -> Result<()> {
             } else {
                 Response { to_process: false }
             };
-            site_info.responder.send(response).unwrap();
+            let _ = site_info.responder.send(response);
         }
         let _ = close_tx.send(sites);
     });
@@ -82,98 +78,67 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-struct StartTaskInfo<T: ClientBounds> {
-    site: Arc<String>,
-    tx: Sender<SiteInfo>,
-    client: Client<T>,
-}
-
-struct SiteInfo {
-    site: Arc<String>,
-    responder: oneshot::Sender<Response>,
-}
-
-impl Debug for SiteInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.site)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Response {
-    to_process: bool,
-}
-
-impl Response {
-    fn to_process(&self) -> bool {
-        self.to_process
-    }
-}
-
 fn is_valid_site(site: &str) -> bool {
     // TODO: write proper function
     site.contains("frengor.com")
 }
 
 // https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
-fn spawn_task<T: ClientBounds>(task_info: StartTaskInfo<T>, permit: SemaphorePermit<'static>) -> BoxFuture<'static, ()> {
+fn spawn_task<T: ClientBounds>(task_info: StartTaskInfo<T>, permit: SemaphorePermit<'static>) -> BoxFuture<'static, Result<()>> {
     async move {
-        let links: Option<Vec<_>> = {
-            let html_res = process(&task_info.site, task_info.client.clone()).await;
-            match html_res {
-                Ok(html) => match Selector::parse("a") {
-                    Ok(selector) => {
-                        Some(html.select(&selector)
-                        .filter_map(|a_elem| {
-                            if let Some(link) = a_elem.value().attr("href") {
-                                // TODO: properly handle relative links like "/discord" inside a tags
-                                Some(link.to_string())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect())
-                    },
-                    Err(e) => {
-                        eprintln!("An error occurred parsing selector: {:?}", e.kind);
-                        None
-                    },
-                },
-                Err(e) => {
-                    eprintln!(r#"An error occurred analyzing "{}": {e}"#, task_info.site);
-                    None
-                },
-            }
+        let links = match processing::analyze_html(&task_info).await {
+            Ok(links) => links,
+            Err(err) => bail!(r#"An error occurred analyzing "{}": {err}"#, &task_info.site),
         };
 
-        // We've been busy
-        yield_now().await;
-
-        if let Some(links) = links {
-            stream::iter(links)
-            .filter_map(|link| async {
-                let site = Arc::new(link);
-                let (o_tx, o_rx) = oneshot::channel();
-                task_info.tx.send(SiteInfo { site: Arc::clone(&site), responder: o_tx }).await.unwrap();
-                if o_rx.await.unwrap().to_process() {
-                    Some(StartTaskInfo {
-                        site,
-                        tx: task_info.tx.clone(),
-                        client: task_info.client.clone(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .for_each(|task_info| async {
-                let permit = SEM.acquire().await.unwrap();
-                tokio::spawn(async move {
-                    spawn_task(task_info, permit).await;
-                });
-            })
-            .await;
-        }
-        // Explicitly release permit
+        // Release semaphore before acquiring again
         drop(permit);
+
+        stream::iter(links)
+        .filter(|link| {
+            let ret = is_valid_site(&link);
+            async move { ret }
+        })
+        .filter_map(|link| async {
+            let site = Arc::new(link);
+            let (o_tx, o_rx) = oneshot::channel();
+            if let Err(_) = task_info.tx.send(SiteInfo { site: Arc::clone(&site), responder: o_tx }).await {
+                Some(Err(anyhow!("Couldn't send site to main task!")) as Result<StartTaskInfo<T>>)
+            } else {
+                match o_rx.await {
+                    Ok(resp) if resp.to_process() => {
+                        Some(Ok(StartTaskInfo {
+                            site,
+                            tx: task_info.tx.clone(),
+                            client: task_info.client.clone(),
+                        }))
+                    },
+                    Ok(_) => None,
+                    Err(_) => Some(Err(anyhow!("Couldn't receive the response from main task!")) as Result<StartTaskInfo<T>>),
+                }
+            }
+        })
+        .for_each(|res| async {
+            match res {
+                Ok(task_info) => {
+                    if let Ok(permit) = SEM.acquire().await {
+                        tokio::spawn(async move {
+                            print_err(spawn_task(task_info, permit).await).await;
+                        });
+                    } else {
+                        print_err(Err(anyhow!(r#"An error occurred analyzing "{}": 3"#, &task_info.site)) as Result<()>).await;
+                    }
+                },
+                Err(err) => print_err(Err(anyhow!(r#"An error occurred analyzing "{}": {err}"#, &task_info.site)) as Result<()>).await,
+            };
+        })
+        .await;
+        Ok(())
     }.boxed()
+}
+
+async fn print_err<R>(res: Result<R>) {
+    if let Err(error) = res {
+        let _ = stderr().write(format!("{error}\n").as_bytes()).await;
+    }
 }
