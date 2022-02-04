@@ -1,11 +1,11 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use futures::{FutureExt, stream, StreamExt};
-use futures::future::BoxFuture;
+use futures::{stream, StreamExt};
 use hyper::Body;
-use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
+use tokio::sync::{oneshot, Semaphore};
 use tokio::sync::mpsc::Sender;
+use async_recursion::async_recursion;
 
 use crate::utils::*;
 
@@ -20,6 +20,7 @@ pub struct StartTaskInfo<T: ClientBounds> {
 }
 
 impl<T: ClientBounds> StartTaskInfo<T> {
+    #[async_recursion]
     pub async fn spawn_task(self, semaphore: &'static Semaphore) {
         let permit = match semaphore.acquire().await {
             Ok(permit) => permit,
@@ -29,11 +30,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
             }
         };
 
-        tokio::spawn(self._internal(semaphore, permit));
-    }
-
-    fn _internal(self, semaphore: &'static Semaphore, permit: SemaphorePermit<'static>) -> BoxFuture<'static, ()> {
-        async move {
+        tokio::spawn(async move {
             let links = match processing::analyze_html(&self).await {
                 Ok(links) => links,
                 Err(err) => {
@@ -78,7 +75,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
             for task_info in tmp {
                 task_info.spawn_task(semaphore).await;
             }
-        }.boxed()
+        });
     }
 }
 
