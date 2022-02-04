@@ -103,34 +103,33 @@ fn spawn_task<T: ClientBounds>(task_info: StartTaskInfo<T>, permit: SemaphorePer
             let site = Arc::new(link);
             let (o_tx, o_rx) = oneshot::channel();
             if let Err(_) = task_info.tx.send(SiteInfo { site: Arc::clone(&site), responder: o_tx }).await {
-                Some(Err(anyhow!("Couldn't send site to main task!")) as Result<StartTaskInfo<T>>)
-            } else {
-                match o_rx.await {
-                    Ok(resp) if resp.to_process() => {
-                        Some(Ok(StartTaskInfo {
-                            site,
-                            tx: task_info.tx.clone(),
-                            client: task_info.client.clone(),
-                        }))
-                    },
-                    Ok(_) => None,
-                    Err(_) => Some(Err(anyhow!("Couldn't receive the response from main task!")) as Result<StartTaskInfo<T>>),
+                eprintln("Couldn't send site to main task!", &site).await;
+                return None;
+            }
+
+            match o_rx.await {
+                Ok(resp) if resp.to_process() => {
+                    Some(StartTaskInfo {
+                        site,
+                        tx: task_info.tx.clone(),
+                        client: task_info.client.clone(),
+                    })
+                },
+                Ok(_) => None,
+                Err(_) => {
+                    eprintln("Couldn't receive the response from main task!", &site).await;
+                    None
                 }
             }
         })
-        .for_each(|res| async {
-            match res {
-                Ok(task_info) => {
-                    if let Ok(permit) = SEM.acquire().await {
-                        tokio::spawn(async move {
-                            print_err(spawn_task(task_info, permit).await).await;
-                        });
-                    } else {
-                        print_err(Err(anyhow!(r#"An error occurred analyzing "{}": 3"#, &task_info.site)) as Result<()>).await;
-                    }
-                },
-                Err(err) => print_err(Err(anyhow!(r#"An error occurred analyzing "{}": {err}"#, &task_info.site)) as Result<()>).await,
-            };
+        .for_each(|task_info| async {
+            if let Ok(permit) = SEM.acquire().await {
+                tokio::spawn(async move {
+                    print_err(spawn_task(task_info, permit).await).await;
+                });
+            } else {
+                eprintln("Cannot acquire SEM", &task_info.site).await;
+            }
         })
         .await;
         Ok(())
