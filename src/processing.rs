@@ -42,8 +42,8 @@ pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Resu
         .filter_map(|a_elem| a_elem.value().attr("href"))
         .map(|link| if link.starts_with('/') {
             let mut str = String::with_capacity(base.len() + link.len() + 1);
-            str.push_str(&base);
-            str.push_str(&link);
+            str.push_str(base);
+            str.push_str(link);
             str
         } else {
             link.to_string()
