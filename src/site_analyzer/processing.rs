@@ -8,7 +8,7 @@ use tokio::task::spawn_blocking;
 use url::Url;
 use url_normalizer::normalize;
 
-use crate::types::*;
+use crate::site_analyzer::types::*;
 use crate::utils::*;
 
 pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Result<Vec<String>> {
@@ -68,12 +68,6 @@ pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Resu
     rx.await.with_context(|| format!("Cannot analyze site {}", &task_info.site))?
 }
 
-pub async fn process<T: ClientBounds>(_site: &str, _client: Client<T>) -> Result<Html> {
-    //let doc = fetch(uri, client).await?;
-    //Ok(Html::parse_document(&doc))
-    todo!()
-}
-
 pub async fn fetch<T: ClientBounds>(site: &str, client: Client<T>) -> Result<String> {
     async fn get_content<T: ClientBounds>(uri: Uri, client: Client<T>) -> Result<String> {
         let resp = client.get(uri).await;
@@ -94,4 +88,9 @@ pub async fn fetch<T: ClientBounds>(site: &str, client: Client<T>) -> Result<Str
         Some(x) => bail!("invalid URL protocol {x}"),
         None => bail!("missing protocol in URL"),
     }
+}
+
+pub fn is_valid_site(site: &str) -> bool {
+    // TODO: write proper function
+    site.contains("frengor.com")
 }

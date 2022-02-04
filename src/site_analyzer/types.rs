@@ -1,15 +1,15 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
 use hyper::Body;
 use tokio::sync::{oneshot, Semaphore};
 use tokio::sync::mpsc::Sender;
-use async_recursion::async_recursion;
 
 use crate::utils::*;
 
-use super::{is_valid_site, processing};
+use super::processing::{self, *};
 
 pub type Client<T> = hyper::Client<T, Body>;
 
