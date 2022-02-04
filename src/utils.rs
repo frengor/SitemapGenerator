@@ -29,13 +29,7 @@ pub trait ClientBounds: Connect + Clone + Send + Sync + 'static {}
 impl<T: Connect + Clone + Send + Sync + 'static> ClientBounds for T {}
 
 pub async fn eprintln(error: impl Display, site: &str) {
-    let _ = stderr().write(format!(r#"An error occurred analyzing "{}": {error}"#, &site).as_bytes()).await;
-}
-
-pub async fn print_err<R>(res: Result<R>) {
-    if let Err(error) = res {
-        let _ = stderr().write(format!("{error}\n").as_bytes()).await;
-    }
+    let _ = stderr().write(format!(r#"An error occurred analyzing "{}": {error}\n"#, &site).as_bytes()).await;
 }
 
 #[macro_export]
