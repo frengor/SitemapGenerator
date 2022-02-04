@@ -1,4 +1,8 @@
+use std::fmt::Display;
+
+use anyhow::Result;
 use hyper::client::connect::Connect;
+use tokio::io::{AsyncWriteExt, stderr};
 
 /// Utility trait to apply trait bounds to generic parameters in functions which takes a `Client`.
 ///
@@ -23,6 +27,16 @@ use hyper::client::connect::Connect;
 pub trait ClientBounds: Connect + Clone + Send + Sync + 'static {}
 
 impl<T: Connect + Clone + Send + Sync + 'static> ClientBounds for T {}
+
+pub async fn eprintln(error: impl Display, site: &str) {
+    let _ = stderr().write(format!(r#"An error occurred analyzing "{}": {error}"#, &site).as_bytes()).await;
+}
+
+pub async fn print_err<R>(res: Result<R>) {
+    if let Err(error) = res {
+        let _ = stderr().write(format!("{error}\n").as_bytes()).await;
+    }
+}
 
 #[macro_export]
 macro_rules! measure_time {
