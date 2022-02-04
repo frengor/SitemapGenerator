@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use anyhow::Result;
 use hyper::client::connect::Connect;
 use tokio::io::{AsyncWriteExt, stderr};
 
