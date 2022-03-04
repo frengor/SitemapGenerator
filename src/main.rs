@@ -6,8 +6,6 @@ mod utils;
 mod site_analyzer;
 mod input;
 
-const CONCURRENT_TASKS: usize = 64;
-
 fn main() {
     let options = Options::from_cli();
 
@@ -28,7 +26,7 @@ fn main() {
     .thread_name("SitemapGenerator")
     .build()
     .expect("Failed building the Runtime")
-    .block_on(site_analyzer::analyze(sites_to_analyze, CONCURRENT_TASKS));
+    .block_on(site_analyzer::analyze(sites_to_analyze, options.concurrent_tasks));
 
     for site in sites {
         println!("{}", site.as_ref());

@@ -3,6 +3,8 @@ use std::collections::HashSet;
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::{Position, Url};
 
+const CONCURRENT_TASKS: usize = 64;
+
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Input {
@@ -11,12 +13,15 @@ struct Input {
     starting_points: Option<Vec<String>>,
     #[clap(short, long)]
     additional_links: Option<Vec<String>>,
+    #[clap(short, long, default_value_t = CONCURRENT_TASKS)]
+    concurrent_tasks: usize,
 }
 
 pub(super) struct Options {
     pub domains_to_analyze: HashSet<Url>,
     pub starting_points: HashSet<Url>,
     pub additional_links: Option<HashSet<Url>>,
+    pub concurrent_tasks: usize,
 }
 
 impl Options {
@@ -31,10 +36,14 @@ impl From<Input> for Options {
         if input.domains_to_analyze.is_empty() {
             error("No domain has been provided.".to_string());
         }
+        if input.concurrent_tasks == 0 {
+           error("Concurrent tasks must be greater than zero.".to_string());
+        }
         let mut opts = Options {
             domains_to_analyze: input.domains_to_analyze.iter().map(|str| domain_validator(str)).collect(),
             starting_points: input.starting_points.map_or(HashSet::new(), |vec| vec.iter().map(|str| url_validator(str)).collect()),
             additional_links: input.additional_links.map(|vec| vec.iter().map(|str| url_parser(str)).collect()),
+            concurrent_tasks: input.concurrent_tasks,
         };
         opts.domains_to_analyze.iter().for_each(|url| { opts.starting_points.insert(url.clone()); });
         opts
