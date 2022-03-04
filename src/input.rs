@@ -49,6 +49,7 @@ fn error(error: String) -> ! {
     ).exit()
 }
 
+#[inline]
 fn url_parser(url: &str) -> Url {
     match Url::parse(url) {
         Ok(url) => url,
@@ -56,6 +57,7 @@ fn url_parser(url: &str) -> Url {
     }
 }
 
+#[inline]
 fn url_validator(url: &str) -> Url {
     let url = url_parser(url);
     if url.cannot_be_a_base() {
@@ -64,6 +66,7 @@ fn url_validator(url: &str) -> Url {
     url
 }
 
+#[inline]
 fn domain_validator(domain: &str) -> Url {
     let domain = url_validator(domain);
     {
