@@ -3,8 +3,6 @@ use std::collections::HashSet;
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::{Position, Url};
 
-const CONCURRENT_TASKS: usize = 64;
-
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Input {
@@ -13,7 +11,7 @@ struct Input {
     starting_points: Option<Vec<String>>,
     #[clap(short, long)]
     additional_links: Option<Vec<String>>,
-    #[clap(short, long, default_value_t = CONCURRENT_TASKS)]
+    #[clap(short, long, default_value_t = num_cpus::get())]
     concurrent_tasks: usize,
 }
 
@@ -58,7 +56,6 @@ fn error(error: String) -> ! {
     ).exit()
 }
 
-#[inline]
 fn url_parser(url: &str) -> Url {
     match Url::parse(url) {
         Ok(url) => url,
@@ -66,7 +63,6 @@ fn url_parser(url: &str) -> Url {
     }
 }
 
-#[inline]
 fn url_validator(url: &str) -> Url {
     let url = url_parser(url);
     if url.cannot_be_a_base() {
@@ -75,7 +71,6 @@ fn url_validator(url: &str) -> Url {
     url
 }
 
-#[inline]
 fn domain_validator(domain: &str) -> Url {
     let domain = url_validator(domain);
     {
