@@ -19,11 +19,15 @@ pub struct StartTaskInfo<T: ClientBounds> {
     pub tx: Sender<SiteInfo>,
     pub client: Client<T>,
     pub validator: Validator,
+    pub recursion: usize,
 }
 
 impl<T: ClientBounds> StartTaskInfo<T> {
     #[async_recursion]
     pub async fn spawn_task(self, semaphore: &'static Semaphore) {
+        if self.recursion == 0 {
+           return;
+        }
         let permit = match semaphore.acquire().await {
             Ok(permit) => permit,
             Err(_) => {
@@ -57,6 +61,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
                             tx: self.tx.clone(),
                             client: self.client.clone(),
                             validator: self.validator.clone(),
+                            recursion: self.recursion - 1,
                         })
                     },
                     Ok(_) => None,

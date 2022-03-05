@@ -3,51 +3,23 @@ use std::sync::Arc;
 
 use hyper_tls::HttpsConnector;
 use tokio::sync::{mpsc, Semaphore};
-use tokio::sync::OnceCell;
 use url::Url;
 
 use types::*;
+use crate::get_options;
 
 pub mod processing;
 pub mod types;
 
 static SEM: Semaphore = Semaphore::const_new(0);
-static OPTIONS: OnceCell<AnalyzerOptions> = OnceCell::const_new();
 
-pub struct AnalyzerOptions {
-    max_task_count: usize,
-    remove_query_and_fragment: bool,
-}
+pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Validator) -> HashSet<impl AsRef<Url>> {
+    let options = get_options();
 
-impl AnalyzerOptions {
-    #[inline]
-    pub fn new(max_task_count: usize, remove_query_and_fragment: bool) -> AnalyzerOptions {
-        AnalyzerOptions {
-            max_task_count,
-            remove_query_and_fragment,
-        }
-    }
-
-    #[inline]
-    pub fn max_task_count(&self) -> usize {
-        self.max_task_count
-    }
-
-    #[inline]
-    pub fn remove_query_and_fragment(&self) -> bool {
-        self.remove_query_and_fragment
-    }
-}
-
-pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Validator, analyzerOptions: AnalyzerOptions) -> HashSet<impl AsRef<Url>> {
-    let max_task_count = analyzerOptions.max_task_count();
-    if OPTIONS.set(analyzerOptions).is_err() {
-        panic!("Cannot set OPTIONS.");
-    }
-    SEM.add_permits(max_task_count);
+    SEM.add_permits(options.max_task_count());
 
     let client = Client::builder().build(HttpsConnector::new());
-    let (tx, mut rx) = mpsc::channel(max_task_count);
+    let (tx, mut rx) = mpsc::channel(options.max_task_count());
 
     let mut sites = HashSet::new();
 
@@ -57,7 +29,13 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
     .filter(|site| sites.insert(Arc::clone(site)));
 
     for site in iter {
-        StartTaskInfo { site, tx: tx.clone(), client: client.clone(), validator: validator.clone() }.spawn_task(&SEM).await;
+        StartTaskInfo {
+            site,
+            tx: tx.clone(),
+            client: client.clone(),
+            validator: validator.clone(),
+            recursion: options.max_recursion(),
+        }.spawn_task(&SEM).await;
     }
 
     // Drop our sender

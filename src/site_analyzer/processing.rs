@@ -6,14 +6,18 @@ use hyper::header::LOCATION;
 use scraper::{Html, Selector};
 use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
-use url::{Url};
+use url::Url;
 
+use crate::get_options;
 use crate::site_analyzer::types::*;
 use crate::utils::*;
 
 pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Result<Vec<Url>> {
-    println!("task_info.site.as_str(): {}", task_info.site.as_str());
     let html_page = fetch(task_info.site.as_str(), task_info.client.clone()).await?;
+    let options = get_options();
+    if options.verbose() {
+        println(format!("Analyzing: \"{}\"\n", task_info.site.as_str())).await;
+    }
 
     let (tx, rx) = oneshot::channel();
     let site = Arc::clone(&task_info.site);
@@ -45,7 +49,7 @@ pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Resu
             .collect()
         }
 
-        let links = if super::OPTIONS.get().unwrap().remove_query_and_fragment() {
+        let links = if options.remove_query_and_fragment() {
             finish_collecting(iter.map(|mut url| {
                 url.set_query(None);
                 url.set_fragment(None);
