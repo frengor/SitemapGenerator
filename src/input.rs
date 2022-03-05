@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::{Position, Url};
+use url_normalizer::normalize;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -57,9 +58,13 @@ fn error(error: String) -> ! {
 }
 
 fn url_parser(url: &str) -> Url {
-    match Url::parse(url) {
+    let parsed_url = match Url::parse(url) {
         Ok(url) => url,
         Err(parse_err) => error(parse_err.to_string()),
+    };
+    match normalize(parsed_url) {
+        Ok(url) => url,
+        Err(_) => error(format!(r#"Cannot normalize url "{url}""#)),
     }
 }
 

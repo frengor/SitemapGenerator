@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::input::Options;
+use crate::site_analyzer::AnalyzerOptions;
 use crate::site_analyzer::types::Validator;
 
 mod utils;
@@ -25,7 +26,10 @@ fn main() {
     .thread_name("SitemapGenerator")
     .build()
     .expect("Failed building the Runtime")
-    .block_on(site_analyzer::analyze(sites_to_analyze.into_iter(), Validator::new(options.domains_to_analyze.into_iter()),options.concurrent_tasks));
+    .block_on(site_analyzer::analyze(sites_to_analyze.into_iter(),
+                                     Validator::new(options.domains_to_analyze.into_iter()),
+                                     AnalyzerOptions::new(options.concurrent_tasks, true)
+    ));
 
     for site in sites {
         println!("{}", site.as_ref());

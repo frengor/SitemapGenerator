@@ -27,7 +27,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
         let permit = match semaphore.acquire().await {
             Ok(permit) => permit,
             Err(_) => {
-                eprintln("cannot spawn task", &self.site.to_string()).await;
+                eprintln("cannot spawn task", self.site.as_str()).await;
                 return;
             }
         };
@@ -36,7 +36,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
             let links = match processing::analyze_html(&self).await {
                 Ok(links) => links,
                 Err(err) => {
-                    eprintln(err, &self.site.to_string()).await;
+                    eprintln(err, self.site.as_str()).await;
                     return;
                 },
             };
@@ -95,6 +95,7 @@ pub struct Response {
 }
 
 impl Response {
+    #[inline]
     pub fn to_process(&self) -> bool {
         self.to_process
     }
@@ -102,28 +103,23 @@ impl Response {
 
 #[derive(Debug, Clone)]
 pub struct Validator {
+    // Using an Arc to allow cloning
     domains: Arc<Vec<String>>,
 }
 
 impl Validator {
     pub fn new(iter: impl Iterator<Item=Url>) -> Validator {
         Validator {
-            domains: Arc::new(iter.normalize()
-            .map(|mut url| {
-                url.set_query(None);
-                url.set_fragment(None);
-                url.set_path("/");
-                url
-            })
+            domains: Arc::new(iter
             .filter_map(|url| url.host_str().map(|url| url.to_string()))
             .collect()),
         }
     }
 
     pub fn is_valid(&self, url: &Url) -> bool {
-        let tmp = self.domains.iter().any(|domain| {
-            url.host_str().map_or(false, |host| host == domain)
-        });
-        tmp
+        let host_str = url.host_str();
+        self.domains.iter().any(|domain| {
+            host_str.map_or(false, |host| host == domain)
+        })
     }
 }

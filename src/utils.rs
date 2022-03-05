@@ -30,7 +30,7 @@ pub trait ClientBounds: Connect + Clone + Send + Sync + 'static {}
 impl<T: Connect + Clone + Send + Sync + 'static> ClientBounds for T {}
 
 pub async fn eprintln(error: impl Display, site: &str) {
-    let _ = stderr().write(format!(r#"An error occurred analyzing "{}": {error}\n"#, &site).as_bytes()).await;
+    let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", &site).as_bytes()).await;
 }
 
 pub trait Normalize: Iterator {
@@ -56,9 +56,7 @@ impl<'it, It: Iterator<Item=Url>> Iterator for Normalizer<It> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         for url in self.iter.by_ref() {
-            if let Ok(/*mut */normalized) = normalize(url) {
-                /*normalized.set_query(None);
-                normalized.set_fragment(None);*/
+            if let Ok(normalized) = normalize(url) {
                 return Some(normalized);
             }
         }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use hyper_tls::HttpsConnector;
 use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::OnceCell;
 use url::Url;
 
 use types::*;
@@ -11,8 +12,38 @@ pub mod processing;
 pub mod types;
 
 static SEM: Semaphore = Semaphore::const_new(0);
+static OPTIONS: OnceCell<AnalyzerOptions> = OnceCell::const_new();
 
-pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Validator, max_task_count: usize) -> HashSet<impl AsRef<Url>> {
+pub struct AnalyzerOptions {
+    max_task_count: usize,
+    remove_query_and_fragment: bool,
+}
+
+impl AnalyzerOptions {
+    #[inline]
+    pub fn new(max_task_count: usize, remove_query_and_fragment: bool) -> AnalyzerOptions {
+        AnalyzerOptions {
+            max_task_count,
+            remove_query_and_fragment,
+        }
+    }
+
+    #[inline]
+    pub fn max_task_count(&self) -> usize {
+        self.max_task_count
+    }
+
+    #[inline]
+    pub fn remove_query_and_fragment(&self) -> bool {
+        self.remove_query_and_fragment
+    }
+}
+
+pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Validator, analyzerOptions: AnalyzerOptions) -> HashSet<impl AsRef<Url>> {
+    let max_task_count = analyzerOptions.max_task_count();
+    if OPTIONS.set(analyzerOptions).is_err() {
+        panic!("Cannot set OPTIONS.");
+    }
     SEM.add_permits(max_task_count);
 
     let client = Client::builder().build(HttpsConnector::new());
@@ -33,14 +64,9 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
     drop(tx);
 
     while let Some(site_info) = rx.recv().await {
-        let response = if validator.is_valid(&site_info.site) && sites.insert(Arc::clone(&site_info.site)) {
-
-            // Site is new and to analyze
-            Response { to_process: true }
-        } else {
-            Response { to_process: false }
-        };
-        let _ = site_info.responder.send(response);
+        let _ = site_info.responder.send(Response {
+            to_process: validator.is_valid(&site_info.site) && sites.insert(Arc::clone(&site_info.site)),
+        });
     }
 
     sites
