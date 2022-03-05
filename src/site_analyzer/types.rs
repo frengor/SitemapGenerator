@@ -6,17 +6,19 @@ use futures::{stream, StreamExt};
 use hyper::Body;
 use tokio::sync::{oneshot, Semaphore};
 use tokio::sync::mpsc::Sender;
+use url::Url;
 
 use crate::utils::*;
 
-use super::processing::{self, *};
+use super::processing;
 
 pub type Client<T> = hyper::Client<T, Body>;
 
 pub struct StartTaskInfo<T: ClientBounds> {
-    pub site: Arc<String>,
+    pub site: Arc<Url>,
     pub tx: Sender<SiteInfo>,
     pub client: Client<T>,
+    pub validator: Validator,
 }
 
 impl<T: ClientBounds> StartTaskInfo<T> {
@@ -25,7 +27,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
         let permit = match semaphore.acquire().await {
             Ok(permit) => permit,
             Err(_) => {
-                eprintln("cannot spawn task", &self.site).await;
+                eprintln("cannot spawn task", &self.site.to_string()).await;
                 return;
             }
         };
@@ -34,21 +36,17 @@ impl<T: ClientBounds> StartTaskInfo<T> {
             let links = match processing::analyze_html(&self).await {
                 Ok(links) => links,
                 Err(err) => {
-                    eprintln(err, &self.site).await;
+                    eprintln(err, &self.site.to_string()).await;
                     return;
                 },
             };
 
             let tmp: Vec<_> = stream::iter(links)
-            .filter(|link| {
-                let ret = is_valid_site(link);
-                async move { ret }
-            })
             .filter_map(|link| async {
                 let site = Arc::new(link);
                 let (o_tx, o_rx) = oneshot::channel();
                 if self.tx.send(SiteInfo { site: Arc::clone(&site), responder: o_tx }).await.is_err() {
-                    eprintln("Couldn't send site to main task!", &site).await;
+                    eprintln("Couldn't send site to main task!", site.as_str()).await;
                     return None;
                 }
 
@@ -58,11 +56,12 @@ impl<T: ClientBounds> StartTaskInfo<T> {
                             site,
                             tx: self.tx.clone(),
                             client: self.client.clone(),
+                            validator: self.validator.clone(),
                         })
                     },
                     Ok(_) => None,
                     Err(_) => {
-                        eprintln("Couldn't receive the response from main task!", &site).await;
+                        eprintln("Couldn't receive the response from main task!", site.as_str()).await;
                         None
                     }
                 }
@@ -80,7 +79,7 @@ impl<T: ClientBounds> StartTaskInfo<T> {
 }
 
 pub struct SiteInfo {
-    pub site: Arc<String>,
+    pub site: Arc<Url>,
     pub responder: oneshot::Sender<Response>,
 }
 
@@ -98,5 +97,33 @@ pub struct Response {
 impl Response {
     pub fn to_process(&self) -> bool {
         self.to_process
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Validator {
+    domains: Arc<Vec<String>>,
+}
+
+impl Validator {
+    pub fn new(iter: impl Iterator<Item=Url>) -> Validator {
+        Validator {
+            domains: Arc::new(iter.normalize()
+            .map(|mut url| {
+                url.set_query(None);
+                url.set_fragment(None);
+                url.set_path("/");
+                url
+            })
+            .filter_map(|url| url.host_str().map(|url| url.to_string()))
+            .collect()),
+        }
+    }
+
+    pub fn is_valid(&self, url: &Url) -> bool {
+        let tmp = self.domains.iter().any(|domain| {
+            url.host_str().map_or(false, |host| host == domain)
+        });
+        tmp
     }
 }

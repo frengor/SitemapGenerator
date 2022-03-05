@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use hyper::client::connect::Connect;
 use tokio::io::{AsyncWriteExt, stderr};
+use url::Url;
+use url_normalizer::normalize;
 
 /// Utility trait to apply trait bounds to generic parameters in functions which takes a `Client`.
 ///
@@ -29,6 +31,39 @@ impl<T: Connect + Clone + Send + Sync + 'static> ClientBounds for T {}
 
 pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!(r#"An error occurred analyzing "{}": {error}\n"#, &site).as_bytes()).await;
+}
+
+pub trait Normalize: Iterator {
+    fn normalize(self) -> Normalizer<Self> where Self: Sized;
+}
+
+impl<It: Iterator<Item=Url>> Normalize for It {
+    #[inline]
+    fn normalize(self) -> Normalizer<Self> where Self: Sized {
+        Normalizer {
+            iter: self,
+        }
+    }
+}
+
+pub struct Normalizer<It: Iterator> {
+    iter: It,
+}
+
+impl<'it, It: Iterator<Item=Url>> Iterator for Normalizer<It> {
+    type Item = Url;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        for url in self.iter.by_ref() {
+            if let Ok(/*mut */normalized) = normalize(url) {
+                /*normalized.set_query(None);
+                normalized.set_fragment(None);*/
+                return Some(normalized);
+            }
+        }
+        None
+    }
 }
 
 #[macro_export]

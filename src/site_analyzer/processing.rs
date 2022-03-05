@@ -5,17 +5,17 @@ use hyper::Uri;
 use scraper::{Html, Selector};
 use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
-use url::Url;
-use url_normalizer::normalize;
+use url::{Url};
 
 use crate::site_analyzer::types::*;
 use crate::utils::*;
 
-pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Result<Vec<String>> {
-    let html_page = fetch(&task_info.site, task_info.client.clone()).await?;
+pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Result<Vec<Url>> {
+    let html_page = fetch(task_info.site.as_str(), task_info.client.clone()).await?;
 
     let (tx, rx) = oneshot::channel();
     let site = Arc::clone(&task_info.site);
+    let validator = task_info.validator.clone();
 
     spawn_blocking(move || {
         let html = Html::parse_document(&html_page);
@@ -29,37 +29,23 @@ pub async fn analyze_html<T: ClientBounds>(task_info: &StartTaskInfo<T>) -> Resu
             },
         };
 
-        let base = match Selector::parse("base") {
-            Ok(selector) => {
-                html.select(&selector)
-                .filter_map(|elem| elem.value().attr("href"))
-                .next().unwrap_or(&site)
-            },
-            Err(_) => &site,
-        };
-
-        let links: Vec<String> = html.select(&selector)
+        let links: Vec<Url> = html.select(&selector)
         .filter_map(|a_elem| a_elem.value().attr("href"))
-        .map(|link| if link.starts_with('/') {
-            let mut str = String::with_capacity(base.len() + link.len() + 1);
-            str.push_str(base);
-            str.push_str(link);
-            str
-        } else {
-            link.to_string()
+        .filter_map(|link| match site.join(link) {
+            Ok(link) => Some(link),
+            Err(_) => None,
         })
-        .filter_map(|link| {
-            match Url::parse(&link) {
-                Ok(url) => Some(url),
-                Err(_) => None,
-            }
+        .filter(|url| match url.scheme() {
+            "http" | "https" => true,
+            _ => false,
         })
-        .filter_map(|url| {
-            match normalize(url) {
-                Ok(normalized) => Some(normalized.into()),
-                Err(_) => None,
-            }
+        .map(|mut url| {
+            url.set_query(None);
+            url.set_fragment(None);
+            url
         })
+        .normalize()
+        .filter(|url| validator.is_valid(url))
         .collect();
 
         let _ = tx.send(Ok(links));
@@ -88,9 +74,4 @@ pub async fn fetch<T: ClientBounds>(site: &str, client: Client<T>) -> Result<Str
         Some(x) => bail!("invalid URL protocol {x}"),
         None => bail!("missing protocol in URL"),
     }
-}
-
-pub fn is_valid_site(site: &str) -> bool {
-    // TODO: write proper function
-    site.contains("frengor.com")
 }
