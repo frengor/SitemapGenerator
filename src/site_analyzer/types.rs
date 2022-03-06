@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
-use hyper::Body;
 use tokio::sync::{oneshot, Semaphore};
 use tokio::sync::mpsc::Sender;
 use url::Url;
@@ -12,17 +11,14 @@ use crate::utils::*;
 
 use super::processing;
 
-pub type Client<T> = hyper::Client<T, Body>;
-
-pub struct StartTaskInfo<T: ClientBounds> {
+pub struct StartTaskInfo {
     pub site: Arc<Url>,
     pub tx: Sender<SiteInfo>,
-    pub client: Client<T>,
     pub validator: Validator,
     pub recursion: usize,
 }
 
-impl<T: ClientBounds> StartTaskInfo<T> {
+impl StartTaskInfo {
     #[async_recursion]
     pub async fn spawn_task(self, semaphore: &'static Semaphore) {
         if self.recursion == 0 {
@@ -59,7 +55,6 @@ impl<T: ClientBounds> StartTaskInfo<T> {
                         Some(StartTaskInfo {
                             site,
                             tx: self.tx.clone(),
-                            client: self.client.clone(),
                             validator: self.validator.clone(),
                             recursion: self.recursion - 1,
                         })

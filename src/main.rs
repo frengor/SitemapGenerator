@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use tokio::sync::OnceCell;
+
 use crate::input::Options;
 use crate::site_analyzer::types::Validator;
 
@@ -15,7 +16,7 @@ pub fn get_options() -> &'static Options {
 }
 
 fn main() {
-    let mut options = Options::from_cli();
+    let (options, other_options) = input::from_cli();
 
     let _sites_to_analyze = vec![
         "185.25.204.194",
@@ -23,8 +24,6 @@ fn main() {
         "https://frengor.com/",
         "https://frengor.com/UltimateAdvancementAPI/",
     ];
-
-    let other_options = options.other_options().unwrap();
 
     if OPTIONS.set(options).is_err() {
         panic!("Cannot set OPTIONS");

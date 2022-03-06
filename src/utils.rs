@@ -1,37 +1,14 @@
 use std::fmt::Display;
 
-use hyper::client::connect::Connect;
 use tokio::io::{AsyncWriteExt, stderr, stdout};
 use url::Url;
 
-/// Utility trait to apply trait bounds to generic parameters in functions which takes a `Client`.
-///
-/// The following code is more readable
-/// ```
-/// fn foo<T: ClientBounds>(client: Client<T>) {
-///     // code here
-/// }
-///
-/// foo(Client::new());
-/// ```
-/// than this
-/// ```
-/// fn foo<T>(client: Client<T>)
-///     where T: Connect + Clone + Send + Sync + 'static
-/// {
-///     // code here
-/// }
-///
-/// foo(Client::new());
-/// ```
-pub trait ClientBounds: Connect + Clone + Send + Sync + 'static {}
-
-impl<T: Connect + Clone + Send + Sync + 'static> ClientBounds for T {}
-
+#[inline]
 pub async fn println(string: impl AsRef<str>) {
     let _ = stdout().write(string.as_ref().as_bytes()).await;
 }
 
+#[inline]
 pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", site).as_bytes()).await;
 }
@@ -62,6 +39,7 @@ impl<'it, It: Iterator<Item=Url>> Iterator for Normalizer<It> {
     }
 }
 
+#[inline]
 pub fn normalize(url: Url) -> Url {
     let url = url_normalizer::normalize_query(url);
     let url = url_normalizer::normalize_hash(url);

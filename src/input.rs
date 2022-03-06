@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::mem;
 
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::{Position, Url};
@@ -40,29 +39,18 @@ pub(super) struct OtherOptions {
 }
 
 pub struct Options {
-    other_options: Option<OtherOptions>,
     max_task_count: usize,
     remove_query_and_fragment: bool,
     max_recursion: usize,
     verbose: bool,
 }
 
+#[inline]
+pub(super) fn from_cli() -> (Options, OtherOptions) {
+    Input::parse().into()
+}
+
 impl Options {
-    #[inline]
-    pub(super) fn from_cli() -> Options {
-        Input::parse().into()
-    }
-
-    pub(super) fn other_options(&mut self) -> Option<OtherOptions> {
-        if self.other_options.is_some() {
-            let mut tmp: Option<OtherOptions> = None;
-            mem::swap(&mut self.other_options, &mut tmp);
-            Some(tmp.unwrap())
-        } else {
-            None
-        }
-    }
-
     #[inline]
     pub fn max_task_count(&self) -> usize {
         self.max_task_count
@@ -84,7 +72,7 @@ impl Options {
     }
 }
 
-impl From<Input> for Options {
+impl From<Input> for (Options, OtherOptions) {
     fn from(input: Input) -> Self {
         if input.domains_to_analyze.is_empty() {
             error("No domain has been provided.".to_string());
@@ -100,13 +88,13 @@ impl From<Input> for Options {
         };
         other_options.domains_to_analyze.iter().for_each(|url| { other_options.starting_points.insert(url.clone()); });
 
-        Options {
-            other_options: Some(other_options),
+        let options = Options {
             max_task_count: input.max_concurrent_tasks,
             remove_query_and_fragment: input.remove_query_and_fragment,
             max_recursion: input.max_depth,
             verbose: input.verbose,
-        }
+        };
+        (options, other_options)
     }
 }
 

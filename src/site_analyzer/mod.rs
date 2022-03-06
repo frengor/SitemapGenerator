@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use hyper_tls::HttpsConnector;
 use tokio::sync::{mpsc, Semaphore};
 use url::Url;
 
@@ -18,7 +17,6 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
 
     SEM.add_permits(options.max_task_count());
 
-    let client = Client::builder().build(HttpsConnector::new());
     let (tx, mut rx) = mpsc::channel(options.max_task_count());
 
     let mut sites = HashSet::new();
@@ -32,7 +30,6 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
         StartTaskInfo {
             site,
             tx: tx.clone(),
-            client: client.clone(),
             validator: validator.clone(),
             recursion: options.max_recursion(),
         }.spawn_task(&SEM).await;
