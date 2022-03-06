@@ -14,7 +14,10 @@ pub async fn analyze_html(task_info: &StartTaskInfo) -> Result<Vec<Url>> {
     let html_page = reqwest::get((*task_info.site).clone()).await?.text().await?;
     let options = get_options();
     if options.verbose() {
-        println(format!("Analyzing: \"{}\"\n", task_info.site.as_str())).await;
+        let site = task_info.site.clone();
+        tokio::spawn(async move {
+            println(format!("Analyzing: \"{}\"\n", site.as_str())).await;
+        });
     }
 
     let (tx, rx) = oneshot::channel();
