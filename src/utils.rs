@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::iter::Map;
 
 use tokio::io::{AsyncWriteExt, stderr, stdout};
 use url::Url;
@@ -13,31 +14,17 @@ pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", site).as_bytes()).await;
 }
 
-pub trait Normalize: Iterator {
-    fn normalize(self) -> Normalizer<Self> where Self: Sized;
-}
-
-impl<It: Iterator<Item=Url>> Normalize for It {
+pub trait Normalize: Iterator<Item=Url> {
     #[inline]
-    fn normalize(self) -> Normalizer<Self> where Self: Sized {
-        Normalizer {
-            iter: self,
-        }
+    fn normalize(self) -> Map<Self, fn(Url) -> Url>
+    where
+        Self: Sized
+    {
+        self.map(normalize)
     }
 }
 
-pub struct Normalizer<It: Iterator> {
-    iter: It,
-}
-
-impl<'it, It: Iterator<Item=Url>> Iterator for Normalizer<It> {
-    type Item = Url;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(normalize)
-    }
-}
+impl<It: Iterator<Item=Url>> Normalize for It {}
 
 #[inline]
 pub fn normalize(url: Url) -> Url {
