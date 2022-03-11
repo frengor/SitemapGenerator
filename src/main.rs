@@ -1,19 +1,8 @@
 #![allow(non_snake_case)]
 
-use tokio::sync::OnceCell;
-
-use crate::input::Options;
-use crate::site_analyzer::types::Validator;
-
-mod utils;
-mod site_analyzer;
 mod input;
 
-static OPTIONS: OnceCell<Options> = OnceCell::const_new();
-
-pub fn get_options() -> &'static Options {
-    OPTIONS.get().unwrap()
-}
+pub use sitemap_generator::{utils, Options, Validator};
 
 fn main() {
     let (options, other_options) = input::from_cli();
@@ -25,10 +14,6 @@ fn main() {
         "https://frengor.com/UltimateAdvancementAPI/",
     ];
 
-    if OPTIONS.set(options).is_err() {
-        panic!("Cannot set OPTIONS");
-    }
-
     let sites_to_analyze = other_options.starting_points;
 
     // Start tokio
@@ -37,7 +22,7 @@ fn main() {
     .thread_name("SitemapGenerator")
     .build()
     .expect("Failed building the Runtime")
-    .block_on(site_analyzer::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.domains_to_analyze.into_iter())));
+    .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.domains_to_analyze.into_iter()), options));
 
     for site in sites {
         println!("{}", site.as_ref());
@@ -47,5 +32,3 @@ fn main() {
         additional_links.iter().map(|site| site.to_string()).for_each(|site| println!("{}", site));
     }
 }
-
-

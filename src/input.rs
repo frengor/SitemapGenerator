@@ -3,6 +3,8 @@ use std::collections::HashSet;
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::{Position, Url};
 
+use sitemap_generator::Options;
+
 use crate::utils::*;
 
 #[derive(Parser)]
@@ -38,38 +40,9 @@ pub(super) struct OtherOptions {
     pub(super) additional_links: Option<HashSet<Url>>,
 }
 
-pub struct Options {
-    max_task_count: usize,
-    remove_query_and_fragment: bool,
-    max_recursion: usize,
-    verbose: bool,
-}
-
 #[inline]
 pub(super) fn from_cli() -> (Options, OtherOptions) {
     Input::parse().into()
-}
-
-impl Options {
-    #[inline]
-    pub fn max_task_count(&self) -> usize {
-        self.max_task_count
-    }
-
-    #[inline]
-    pub fn remove_query_and_fragment(&self) -> bool {
-        self.remove_query_and_fragment
-    }
-
-    #[inline]
-    pub fn max_recursion(&self) -> usize {
-        self.max_recursion
-    }
-
-    #[inline]
-    pub fn verbose(&self) -> bool {
-        self.verbose
-    }
 }
 
 impl From<Input> for (Options, OtherOptions) {
@@ -88,12 +61,7 @@ impl From<Input> for (Options, OtherOptions) {
         };
         other_options.domains_to_analyze.iter().for_each(|url| { other_options.starting_points.insert(url.clone()); });
 
-        let options = Options {
-            max_task_count: input.max_concurrent_tasks,
-            remove_query_and_fragment: input.remove_query_and_fragment,
-            max_recursion: input.max_depth,
-            verbose: input.verbose,
-        };
+        let options = Options::new(input.max_concurrent_tasks, input.remove_query_and_fragment, input.max_depth, input.verbose);
         (options, other_options)
     }
 }

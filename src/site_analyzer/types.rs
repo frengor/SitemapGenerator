@@ -6,6 +6,7 @@ use futures::{stream, StreamExt};
 use tokio::sync::{oneshot, Semaphore};
 use tokio::sync::mpsc::Sender;
 use url::Url;
+use crate::Options;
 
 use crate::utils::*;
 
@@ -20,20 +21,26 @@ pub struct StartTaskInfo {
 
 impl StartTaskInfo {
     #[async_recursion]
-    pub async fn spawn_task(self, semaphore: &'static Semaphore) {
+    pub async fn spawn_task(self, semaphore: Arc<Semaphore>, options: Arc<Options>) {
         if self.recursion == 0 {
            return;
         }
-        let permit = match semaphore.acquire().await {
-            Ok(permit) => permit,
-            Err(_) => {
-                eprintln("cannot spawn task", self.site.as_str()).await;
-                return;
-            }
-        };
 
         tokio::spawn(async move {
-            let links = match processing::analyze_html(&self).await {
+            let permit = match semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    eprintln("cannot spawn task", self.site.as_str()).await;
+                    return;
+                }
+            };
+
+            let links = processing::analyze_html(&self, &options).await;
+
+            // Release semaphore now that blocking task is done
+            drop(permit);
+
+            let links = match links {
                 Ok(links) => links,
                 Err(err) => {
                     eprintln(err, self.site.as_str()).await;
@@ -68,11 +75,8 @@ impl StartTaskInfo {
             })
             .collect().await;
 
-            // Release semaphore before acquiring again
-            drop(permit);
-
             for task_info in tmp {
-                task_info.spawn_task(semaphore).await;
+                task_info.spawn_task(semaphore.clone(), options.clone()).await;
             }
         });
     }

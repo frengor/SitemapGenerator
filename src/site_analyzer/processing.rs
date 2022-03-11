@@ -6,13 +6,13 @@ use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
 use url::Url;
 
-use crate::get_options;
+use crate::Options;
 use crate::site_analyzer::types::*;
 use crate::utils::*;
 
-pub async fn analyze_html(task_info: &StartTaskInfo) -> Result<Vec<Url>> {
+pub async fn analyze_html(task_info: &StartTaskInfo, options: &Options) -> Result<Vec<Url>> {
     let html_page = reqwest::get((*task_info.site).clone()).await?.text().await?;
-    let options = get_options();
+
     if options.verbose() {
         let site = task_info.site.clone();
         tokio::spawn(async move {
@@ -23,6 +23,7 @@ pub async fn analyze_html(task_info: &StartTaskInfo) -> Result<Vec<Url>> {
     let (tx, rx) = oneshot::channel();
     let site = Arc::clone(&task_info.site);
     let validator = task_info.validator.clone();
+    let remove_query_and_fragment = options.remove_query_and_fragment();
 
     spawn_blocking(move || {
         let html = Html::parse_document(&html_page);
@@ -50,7 +51,7 @@ pub async fn analyze_html(task_info: &StartTaskInfo) -> Result<Vec<Url>> {
             .collect()
         }
 
-        let links = if options.remove_query_and_fragment() {
+        let links = if remove_query_and_fragment {
             finish_collecting(iter.map(|mut url| {
                 url.set_query(None);
                 url.set_fragment(None);
