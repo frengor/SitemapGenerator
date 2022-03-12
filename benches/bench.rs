@@ -1,7 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use url::Url;
-use sitemap_generator::{analyze, Options, Validator};
+use criterion::{black_box, Criterion, criterion_group, criterion_main};
 use tokio::runtime::Runtime;
+use url::Url;
+
+use sitemap_generator::{analyze, Options, Validator};
 
 fn benchmark(c: &mut Criterion) {
     let options = Options::builder().set_remove_query_and_fragment(true).build();
@@ -27,7 +28,7 @@ fn start_runtime() -> Runtime {
     .expect("Failed building the Runtime")
 }
 
-criterion_group!{
+criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10);
     targets = benchmark
