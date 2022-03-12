@@ -5,7 +5,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
 use url::Url;
 
-use crate::site_analyzer::types::{StartTaskInfo, Response};
 pub use crate::options::*;
 use crate::site_analyzer::types::StartTaskInfo;
 pub use crate::site_analyzer::types::Validator;
