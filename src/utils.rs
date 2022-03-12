@@ -14,17 +14,14 @@ pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", site).as_bytes()).await;
 }
 
-pub trait Normalize: Iterator<Item=Url> {
+pub trait Normalize: Iterator<Item=Url> + Sized {
     #[inline]
-    fn normalize(self) -> Map<Self, fn(Url) -> Url>
-    where
-        Self: Sized
-    {
+    fn normalize(self) -> Map<Self, fn(Url) -> Url> {
         self.map(normalize)
     }
 }
 
-impl<It: Iterator<Item=Url>> Normalize for It {}
+impl<It: Iterator<Item=Url> + Sized> Normalize for It {}
 
 #[inline]
 pub fn normalize(url: Url) -> Url {
