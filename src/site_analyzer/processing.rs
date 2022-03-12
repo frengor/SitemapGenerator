@@ -1,22 +1,21 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use scraper::{Html, Selector};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 use tokio::task::spawn_blocking;
 use url::Url;
 
-use crate::Options;
-use crate::site_analyzer::types::*;
+use crate::{Options, StartTaskInfo, Validator};
 use crate::utils::*;
 
-pub async fn analyze_html(task_info: &StartTaskInfo, options: &Options) -> Result<Vec<Url>> {
+pub async fn analyze_html(task_info: &StartTaskInfo, semaphore: &Semaphore, options: &Options) -> Result<Vec<Url>> {
     let html_page = reqwest::get((*task_info.site).clone()).await?.text().await?;
 
     if options.verbose() {
         let site = task_info.site.clone();
-        tokio::spawn(async move {
-            println(format!("Analyzing: \"{}\"\n", site.as_str())).await;
+        tokio::spawn({
+            println(format!("Analyzing: \"{}\"\n", site.as_str()))
         });
     }
 
@@ -24,6 +23,11 @@ pub async fn analyze_html(task_info: &StartTaskInfo, options: &Options) -> Resul
     let site = Arc::clone(&task_info.site);
     let validator = task_info.validator.clone();
     let remove_query_and_fragment = options.remove_query_and_fragment();
+
+    let permit = match semaphore.acquire().await {
+        Ok(permit) => permit,
+        Err(_) => bail!("cannot spawn task"),
+    };
 
     spawn_blocking(move || {
         let html = Html::parse_document(&html_page);
@@ -64,5 +68,10 @@ pub async fn analyze_html(task_info: &StartTaskInfo, options: &Options) -> Resul
         let _ = tx.send(Ok(links));
     });
 
-    rx.await.with_context(|| format!("Cannot analyze site {}", &task_info.site))?
+    let result = rx.await.with_context(|| format!("Cannot analyze site {}", &task_info.site))?;
+
+    // Release semaphore
+    drop(permit);
+
+    result
 }
