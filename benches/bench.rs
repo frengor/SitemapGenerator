@@ -9,7 +9,7 @@ fn benchmark(c: &mut Criterion) {
     let domain = std::iter::once(Url::parse("https://frengor.com").unwrap());
     let validator = Validator::new(domain);
     let ulaapi = std::iter::once(Url::parse("https://frengor.com/UltimateAdvancementAPI/").unwrap());
-    let javadocs = std::iter::once(Url::parse("https://frengor.com/javadocs/").unwrap());
+    let javadocs = std::iter::once(Url::parse("https://frengor.com/javadocs/UltimateAdvancementAPI/").unwrap());
 
     c.bench_function("sitemap_small", |b| b.to_async(start_runtime()).iter(|| {
         analyze(black_box(ulaapi.clone()), black_box(validator.clone()), black_box(options))
