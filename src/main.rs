@@ -23,7 +23,7 @@ fn main() {
     .thread_name("SitemapGenerator")
     .build()
     .expect("Failed building the Runtime")
-    .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.domains_to_analyze.into_iter()), options));
+    .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.sites_to_analyze.into_iter()), options));
 
     for site in sites {
         println!("{}", site.as_ref());
