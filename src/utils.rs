@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::iter::Map;
+use std::iter::{Filter, Map};
 
 use tokio::io::{AsyncWriteExt, stderr, stdout};
 use url::Url;
@@ -14,20 +14,30 @@ pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", site).as_bytes()).await;
 }
 
-pub trait Normalize: Iterator<Item=Url> + Sized {
+pub trait UrlIteratorUtil: Iterator<Item=Url> + Sized {
     #[inline]
     fn normalize(self) -> Map<Self, fn(Url) -> Url> {
         self.map(normalize)
     }
+
+    #[inline]
+    fn filter_http(self) -> Filter<Self, fn(&Url) -> bool> {
+        self.filter(filter_http)
+    }
 }
 
-impl<It: Iterator<Item=Url> + Sized> Normalize for It {}
+impl<It: Iterator<Item=Url> + Sized> UrlIteratorUtil for It {}
 
 #[inline]
 pub fn normalize(url: Url) -> Url {
     let url = url_normalizer::normalize_query(url);
     let url = url_normalizer::normalize_hash(url);
     url
+}
+
+#[inline]
+pub fn filter_http(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
 }
 
 #[macro_export]
