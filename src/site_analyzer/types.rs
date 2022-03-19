@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use futures::{stream, StreamExt};
 use reqwest::Client;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Semaphore;
@@ -33,19 +32,18 @@ impl StartTaskInfo {
                 },
             };
 
-            stream::iter(links)
-            .for_each(|link| async {
-                let site = Arc::new(link);
+            for link in links {
+                let link = Arc::new(link);
                 let start_task_info = StartTaskInfo {
-                    site: site.clone(),
+                    site: link.clone(),
                     tx: self.tx.clone(),
                     validator: self.validator.clone(),
                     recursion: self.recursion - 1,
                 };
                 if self.tx.send(start_task_info).await.is_err() {
-                    eprintln("Couldn't send site to main task!", site.as_str()).await;
+                    eprintln("Couldn't send site to main task!", link.as_str()).await;
                 }
-            }).await;
+            };
         });
     }
 }
