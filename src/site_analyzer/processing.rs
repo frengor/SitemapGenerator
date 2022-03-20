@@ -8,7 +8,7 @@ use tokio::sync::{oneshot, Semaphore};
 use tokio::task::spawn_blocking;
 use url::Url;
 
-use crate::{Options, StartTaskInfo, Validator};
+use crate::{Options, TaskInfo, Validator};
 use crate::utils::*;
 
 lazy_static! {
@@ -16,21 +16,20 @@ lazy_static! {
     static ref BASE_SELECTOR: Selector = Selector::parse("base").unwrap();
 }
 
-pub async fn analyze_html(task_info: &StartTaskInfo, client: Client, semaphore: &Semaphore, options: &Options) -> Result<Vec<Url>> {
-    let html_page = match client.get((*task_info.site).clone()).build() {
+async fn make_request(task_info: &TaskInfo, client: Client) -> Result<String> {
+    match client.get((*task_info.site).clone()).build() {
         Ok(request) => {
-            client.execute(request).await?.text().await?
+            Ok(client.execute(request).await?.text().await?)
         },
-        Err(err) => {
-            return Err(anyhow!(err));
-        },
-    };
+        Err(err) => Err(anyhow!(err)),
+    }
+}
+
+pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Semaphore, options: &Options) -> Result<Vec<Url>> {
+    let html_page = make_request(task_info, client).await?;
 
     if options.verbose() {
-        let site = task_info.site.clone();
-        tokio::spawn({
-            println(format!("Analyzing: \"{}\"\n", site.as_str()))
-        });
+        verbose_async(task_info.site.as_ref()).await;
     }
 
     let (tx, rx) = oneshot::channel();

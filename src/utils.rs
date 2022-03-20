@@ -10,6 +10,16 @@ pub async fn println(string: impl AsRef<str>) {
 }
 
 #[inline]
+pub fn verbose(site: impl AsRef<str> + Send + Sync + 'static) {
+    tokio::spawn(verbose_async(site));
+}
+
+#[inline]
+pub async fn verbose_async(site: impl AsRef<str>) {
+    println(format!("Analyzing: \"{}\"\n", site.as_ref())).await;
+}
+
+#[inline]
 pub async fn eprintln(error: impl Display, site: &str) {
     let _ = stderr().write(format!("An error occurred analyzing \"{}\": {error}\n", site).as_bytes()).await;
 }

@@ -10,14 +10,14 @@ use crate::Options;
 use crate::site_analyzer::processing::analyze_html;
 use crate::utils::*;
 
-pub struct StartTaskInfo {
+pub struct TaskInfo {
     pub site: Arc<Url>,
-    pub tx: Sender<StartTaskInfo>,
+    pub tx: Sender<TaskInfo>,
     pub validator: Validator,
     pub recursion: usize,
 }
 
-impl StartTaskInfo {
+impl TaskInfo {
     pub async fn spawn_task(self, client: Client, semaphore: Arc<Semaphore>, options: Arc<Options>) {
         if self.recursion == 0 {
             return;
@@ -34,11 +34,11 @@ impl StartTaskInfo {
 
             for link in links {
                 let link = Arc::new(link);
-                let start_task_info = StartTaskInfo {
+                let start_task_info = TaskInfo {
                     site: link.clone(),
                     tx: self.tx.clone(),
                     validator: self.validator.clone(),
-                    recursion: self.recursion - 1,
+                    recursion: self.recursion -1,
                 };
                 if self.tx.send(start_task_info).await.is_err() {
                     eprintln("Couldn't send site to main task!", link.as_str()).await;
