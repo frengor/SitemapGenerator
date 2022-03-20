@@ -1,9 +1,14 @@
-#[derive(Debug, Clone, Copy)]
+use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
+use url::Url;
+
+#[derive(Debug, Clone)]
 pub struct Options {
     max_task_count: usize,
     remove_query_and_fragment: bool,
     max_recursion: usize,
     verbose: bool,
+    verbose_sender: Option<UnboundedSender<Arc<Url>>>,
 }
 
 impl Options {
@@ -14,6 +19,7 @@ impl Options {
             remove_query_and_fragment,
             max_recursion,
             verbose,
+            verbose_sender: None,
         }
     }
 
@@ -40,6 +46,16 @@ impl Options {
     #[inline]
     pub fn verbose(&self) -> bool {
         self.verbose
+    }
+
+    #[inline]
+    pub fn verbose_sender(&self) -> &Option<UnboundedSender<Arc<Url>>> {
+        &self.verbose_sender
+    }
+
+    #[inline]
+    pub fn set_verbose_sender(&mut self, verbose_sender: Option<UnboundedSender<Arc<Url>>>) {
+        self.verbose_sender = verbose_sender;
     }
 }
 
@@ -71,6 +87,7 @@ impl OptionsBuilder {
             remove_query_and_fragment: self.remove_query_and_fragment,
             max_recursion: self.max_recursion,
             verbose: self.verbose,
+            verbose_sender: None,
         }
     }
 

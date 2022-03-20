@@ -10,12 +10,12 @@ pub async fn println(string: impl AsRef<str>) {
 }
 
 #[inline]
-pub fn verbose(site: impl AsRef<str> + Send + Sync + 'static) {
-    tokio::spawn(verbose_async(site));
+pub fn _verbose(site: impl AsRef<str> + Send + Sync + 'static) {
+    tokio::spawn(_verbose_async(site));
 }
 
 #[inline]
-pub async fn verbose_async(site: impl AsRef<str>) {
+pub async fn _verbose_async(site: impl AsRef<str>) {
     println(format!("Analyzing: \"{}\"\n", site.as_ref())).await;
 }
 

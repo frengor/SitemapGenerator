@@ -26,11 +26,12 @@ async fn make_request(task_info: &TaskInfo, client: Client) -> Result<String> {
 }
 
 pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Semaphore, options: &Options) -> Result<Vec<Url>> {
-    let html_page = make_request(task_info, client).await?;
-
     if options.verbose() {
-        verbose_async(task_info.site.as_ref()).await;
+        if let Some(tx) = options.verbose_sender() {
+            let _ = tx.send(task_info.site.clone());
+        }
     }
+    let html_page = make_request(task_info, client).await?;
 
     let (tx, rx) = oneshot::channel();
     let site = Arc::clone(&task_info.site);

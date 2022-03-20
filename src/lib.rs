@@ -37,13 +37,27 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
     let verbose = options.verbose();
     let (tx, mut rx): (UnboundedSender<TaskInfo>, UnboundedReceiver<TaskInfo>) = mpsc::unbounded_channel();
 
+    if verbose {
+        let (verbose_tx, mut verbose_rx) = mpsc::unbounded_channel();
+        options.set_verbose_sender(Some(verbose_tx));
+
+        tokio::spawn(async move {
+            let mut str = String::from("Analyzing: \"__\"\n");
+            let start = 12;
+            while let Some(site) = verbose_rx.recv().await {
+                str.replace_range(start..(str.len() - 2), site.as_str());
+                println(&str).await;
+            }
+        });
+    };
+
     // The first Arc and the Mutex are necessary to make sites movable between threads
     // The Cell is used at the end of this function to allow the HashSet to be returned
     let sites = Sites::new();
     let options = Arc::new(options);
     let sem = Arc::new(Semaphore::new(max_task_count));
 
-    let client = create_client(sites.clone(), validator.clone(), verbose);
+    let client = create_client(sites.clone(), validator.clone(), options.clone());
 
     {
         stream::iter(sites_to_analyze)
@@ -124,7 +138,7 @@ impl Sites {
     }
 }
 
-fn create_client(sites: Sites, validator: Validator, verbose: bool) -> Client {
+fn create_client(sites: Sites, validator: Validator, options: Arc<Options>) -> Client {
     reqwest::Client::builder()
     .user_agent(APP_USER_AGENT)
     .redirect(Policy::custom(move |attempt| {
@@ -145,7 +159,7 @@ fn create_client(sites: Sites, validator: Validator, verbose: bool) -> Client {
         if attempt.status() == StatusCode::MOVED_PERMANENTLY {
             sites.access_map(|hashset| hashset.remove(attempt.url()));
 
-            if verbose {
+            if options.verbose() {
                 tokio::spawn(println(format!("Removed {}", attempt.url().as_str())));
             }
 
@@ -159,19 +173,11 @@ fn create_client(sites: Sites, validator: Validator, verbose: bool) -> Client {
             }
 
             let arc = Arc::new(attempt.url().clone());
-            let insert_result = if verbose {
+            let insert_result = if options.verbose() {
                 if sites.access_map(|hashset| hashset.insert(arc.clone())) {
-                    #[repr(transparent)]
-                    struct AsRefImpl {
-                        arc: Arc<Url>,
+                    if let Some(tx) = options.verbose_sender() {
+                        let _ = tx.send(arc);
                     }
-                    impl AsRef<str> for AsRefImpl {
-                        #[inline(always)]
-                        fn as_ref(&self) -> &str {
-                            self.arc.as_str()
-                        }
-                    }
-                    crate::utils::verbose(AsRefImpl { arc });
                     true
                 } else {
                     false
