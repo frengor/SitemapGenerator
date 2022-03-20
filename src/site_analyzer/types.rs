@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use reqwest::Client;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -12,7 +12,7 @@ use crate::utils::*;
 
 pub struct TaskInfo {
     pub site: Arc<Url>,
-    pub tx: Sender<TaskInfo>,
+    pub tx: UnboundedSender<TaskInfo>,
     pub validator: Validator,
     pub recursion: usize,
 }
@@ -40,7 +40,7 @@ impl TaskInfo {
                     validator: self.validator.clone(),
                     recursion: self.recursion -1,
                 };
-                if self.tx.send(start_task_info).await.is_err() {
+                if self.tx.send(start_task_info).is_err() {
                     eprintln("Couldn't send site to main task!", link.as_str()).await;
                 }
             };

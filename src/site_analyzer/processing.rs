@@ -48,7 +48,7 @@ pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Sema
         let base_url = html.select(&*BASE_SELECTOR)
         .filter_map(|element| element.value().attr("href"))
         .map(Url::parse)
-        .filter_map(|result| result.ok())
+        .filter_map(Result::ok)
         .filter_http()
         .filter(|url| !url.cannot_be_a_base())
         .normalize()
@@ -80,10 +80,10 @@ pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Sema
         let _ = tx.send(Ok(links));
     });
 
-    let result = rx.await.with_context(|| format!("Cannot analyze site {}", &task_info.site))?;
+    let result = rx.await;
 
     // Release semaphore
     drop(permit);
 
-    result
+    result.with_context(|| format!("Cannot analyze site {}", &task_info.site))?
 }
