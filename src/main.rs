@@ -25,11 +25,12 @@ fn main() {
     .expect("Failed building the Runtime")
     .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.sites_to_analyze.into_iter()), options));
 
-    for site in sites {
+    /*for site in sites {
         println!("{}", site.as_ref());
     }
 
     if let Some(additional_links) = other_options.additional_links {
         additional_links.iter().map(|site| site.to_string()).for_each(|site| println!("{}", site));
-    }
+    }*/
+    println!("Done!");
 }
