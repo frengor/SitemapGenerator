@@ -150,7 +150,7 @@ fn create_client(sites: Sites, validator: Validator, options: Arc<Options>) -> C
                     },
                     None => "None",
                 };
-                Some(anyhow!(r#""{}" is permanently moved to "{}", which is not on to analyze"#, previous, attempt.url().as_str()))
+                Some(anyhow!(r#""{}" is redirecting to "{}", which is not on to analyze"#, previous, attempt.url().as_str()))
             } else {
                 None
             }
@@ -160,7 +160,7 @@ fn create_client(sites: Sites, validator: Validator, options: Arc<Options>) -> C
             sites.access_map(|hashset| hashset.remove(attempt.url()));
 
             if options.verbose() {
-                tokio::spawn(println(format!("Removed {}", attempt.url().as_str())));
+                tokio::spawn(println(format!("Removed \"{}\"\n", attempt.url().as_str())));
             }
 
             if let Some(error) = check_validated(&validator, &attempt) {
