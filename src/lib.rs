@@ -3,6 +3,7 @@
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::anyhow;
 use futures::{stream, StreamExt};
@@ -141,6 +142,7 @@ impl Sites {
 fn create_client(sites: Sites, validator: Validator, options: Arc<Options>) -> Client {
     reqwest::Client::builder()
     .user_agent(APP_USER_AGENT)
+    .pool_idle_timeout(Some(Duration::from_secs(2))) // See https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
     .redirect(Policy::custom(move |attempt| {
         fn check_validated(validator: &Validator, attempt: &Attempt) -> Option<anyhow::Error> {
             if !validator.is_valid(attempt.url()) {
