@@ -43,14 +43,14 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
         options.set_verbose_sender(Some(verbose_tx));
 
         tokio::spawn(async move {
-            let mut str = String::from("Analyzing: \"__\"\n");
+            let mut str = String::from("Analyzing: \"__\"\n"); // "__" will be replaced with the site URL
             let start = 12;
             while let Some(site) = verbose_rx.recv().await {
                 str.replace_range(start..(str.len() - 2), site.as_str());
                 println(&str).await;
             }
         });
-    };
+    }
 
     // The first Arc and the Mutex are necessary to make sites movable between threads
     // The Cell is used at the end of this function to allow the HashSet to be returned
