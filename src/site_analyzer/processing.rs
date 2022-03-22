@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -74,6 +74,16 @@ pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Sema
     links.with_context(|| format!("Cannot analyze site {}", &task_info.site))
 }
 
+async fn make_request(task_info: &TaskInfo, client: Client) -> Result<(String, UrlResult)> {
+    let response = client.get((*task_info.site).clone()).send().await?;
+    let url = if *response.url() != *task_info.site {
+        UrlResult::Url(response.url().clone())
+    } else {
+        UrlResult::Arc(task_info.site.clone())
+    };
+    Ok((response.text().await?, url))
+}
+
 enum UrlResult {
     Arc(Arc<Url>),
     Url(Url),
@@ -86,20 +96,5 @@ impl AsRef<Url> for UrlResult {
             UrlResult::Arc(arc) => arc,
             UrlResult::Url(url) => url,
         }
-    }
-}
-
-async fn make_request(task_info: &TaskInfo, client: Client) -> Result<(String, UrlResult)> {
-    match client.get((*task_info.site).clone()).build() {
-        Ok(request) => {
-            let response = client.execute(request).await?;
-            let url = if response.url() != &*task_info.site {
-                UrlResult::Url(response.url().clone())
-            } else {
-                UrlResult::Arc(task_info.site.clone())
-            };
-            Ok((response.text().await?, url))
-        },
-        Err(err) => Err(anyhow!(err)),
     }
 }
