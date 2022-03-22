@@ -1,19 +1,12 @@
 #![allow(non_snake_case)]
 #![forbid(unsafe_code)]
 
-mod input;
+pub use sitemap_generator::{Options, utils, Validator};
 
-pub use sitemap_generator::{utils, Options, Validator};
+mod input;
 
 fn main() {
     let (options, other_options) = input::from_cli();
-
-    let _sites_to_analyze = vec![
-        "185.25.204.194",
-        "https://docs.rs/hyper/0.14.16/hyper/client/struct.Client.html",
-        "https://frengor.com/",
-        "https://frengor.com/UltimateAdvancementAPI/",
-    ];
 
     let sites_to_analyze = other_options.starting_points;
 

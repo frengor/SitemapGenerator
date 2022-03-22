@@ -90,26 +90,6 @@ pub async fn analyze(sites_to_analyze: impl Iterator<Item=Url>, validator: Valid
         }
     }
 
-    /*let (oneshot_tx, oneshot_rx) = oneshot::channel();
-    {
-        let sites = sites.clone();
-        let options = options.clone();
-        let client = client.clone();
-        let sem = sem.clone();
-        thread::Builder::new().name("SitemapGenerator - Main thread".to_string()).spawn(move || {
-            tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async move {
-                // Main loop
-                while let Some(task_info) = rx.recv().await {
-                    if /*validator.is_valid(&task_info.site) check already done &&*/ sites.lock().unwrap().get_mut().insert(task_info.site.clone()) {
-                        task_info.spawn_task(client.clone(), sem.clone(), options.clone()).await;
-                    }
-                }
-
-                let _ = oneshot_tx.send(sites);
-            });
-        });
-    }*/
-
     drop(client);
 
     let make_it_compile = sites.inner.lock().unwrap().replace(HashSet::with_capacity(0));
