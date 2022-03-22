@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::format;
 
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::Url;
@@ -77,7 +78,7 @@ fn error(error: String) -> ! {
 fn url_parser(url: &str) -> Url {
     let parsed_url = match Url::parse(url) {
         Ok(url) => url,
-        Err(parse_err) => error(parse_err.to_string()),
+        Err(parse_err) => error(format!(r#"Error parsing url "{}": {}"#, url, parse_err)),
     };
     normalize(parsed_url)
 }
