@@ -18,12 +18,16 @@ fn main() {
     .expect("Failed building the Runtime")
     .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.sites_to_analyze.into_iter()), options));
 
-    /*for site in sites {
-        println!("{}", site.as_ref());
+    let mut i = 0usize;
+    for site in sites {
+        i += 1; // sites is an iterator, cannot use len()
+        println!("{}", &*site);
     }
 
     if let Some(additional_links) = other_options.additional_links {
+        i += additional_links.len();
         additional_links.iter().map(|site| site.to_string()).for_each(|site| println!("{}", site));
-    }*/
-    println!("Done!");
+    }
+
+    println!("Done! ({})", i);
 }
