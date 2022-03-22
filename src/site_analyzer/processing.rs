@@ -16,13 +16,21 @@ lazy_static! {
     static ref BASE_SELECTOR: Selector = Selector::parse("base").unwrap();
 }
 
+static CONNECTIONS: Semaphore = Semaphore::const_new(50); // 50 usually gives good performances
+
 pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Semaphore, options: &Options) -> Result<Vec<Url>> {
     if options.verbose() {
         if let Some(tx) = options.verbose_sender() {
             let _ = tx.send(task_info.site.clone());
         }
     }
-    let (html_page, site) = make_request(task_info, client).await?;
+
+    let (html_page, site) = {
+        let permit = CONNECTIONS.acquire().await;
+        let page = make_request(task_info, client).await;
+        drop(permit);
+        page?
+    };
 
     let validator = task_info.validator.clone();
     let remove_query_and_fragment = options.remove_query_and_fragment();
