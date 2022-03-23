@@ -13,7 +13,7 @@ use crate::utils::*;
 
 lazy_static! {
     static ref A_SELECTOR: Selector = Selector::parse("a").unwrap();
-    static ref BASE_SELECTOR: Selector = Selector::parse("base").unwrap();
+    static ref BASE_SELECTOR: Selector = Selector::parse("head > base").unwrap();
 }
 
 static CONNECTIONS: Semaphore = Semaphore::const_new(50); // 50 usually gives good performances
@@ -47,12 +47,12 @@ pub async fn analyze_html(task_info: &TaskInfo, client: Client, semaphore: &Sema
         .filter_map(|element| element.value().attr("href"))
         .map(Url::parse)
         .filter_map(Result::ok)
-        .filter_http()
         .filter(|url| !url.cannot_be_a_base())
+        .filter_http()
         .normalize()
         .next();
         // Splitting this in two to make code compile
-        let base_url = base_url.as_ref().unwrap_or_else(|| site.as_ref());
+        let base_url = base_url.as_ref().unwrap_or_else(|| site.as_ref()); // No valid base href has been found
 
         let iter = html.select(&*A_SELECTOR)
         .filter_map(|a_elem| a_elem.value().attr("href"))
