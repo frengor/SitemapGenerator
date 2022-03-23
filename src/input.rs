@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt::format;
 
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::Url;
