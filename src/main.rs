@@ -6,9 +6,9 @@ pub use sitemap_generator::{Options, utils, Validator};
 mod input;
 
 fn main() {
-    let (options, other_options) = input::from_cli();
+    let (options, bin_options) = input::from_cli();
 
-    let sites_to_analyze = other_options.starting_points;
+    let sites_to_analyze = bin_options.starting_points;
 
     // Start tokio
     let sites = tokio::runtime::Builder::new_multi_thread()
@@ -16,7 +16,7 @@ fn main() {
     .thread_name("SitemapGenerator")
     .build()
     .expect("Failed building the Runtime")
-    .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(other_options.sites_to_analyze.into_iter()), options));
+    .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(bin_options.sites_to_analyze.into_iter()), options));
 
     let mut i = 0usize;
     for site in sites {
@@ -24,10 +24,12 @@ fn main() {
         println!("{}", &*site);
     }
 
-    if let Some(additional_links) = other_options.additional_links {
+    if let Some(additional_links) = bin_options.additional_links {
         i += additional_links.len();
-        additional_links.iter().map(|site| site.to_string()).for_each(|site| println!("{}", site));
+        additional_links.iter().for_each(|site| println!("{}", site.as_str()));
     }
 
-    println!("Done! ({})", i);
+    if bin_options.print_total {
+        println!("Done! ({})", i);
+    }
 }

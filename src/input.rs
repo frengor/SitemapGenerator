@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::fmt::format;
+use std::fs;
+use std::path::PathBuf;
 
 use clap::{CommandFactory, ErrorKind, Parser};
 use url::Url;
@@ -32,20 +35,36 @@ struct Input {
     max_depth: usize,
     #[clap(short, long)]
     verbose: bool,
+
+    // Output options
+    #[clap(short = 'l', long = "list")]
+    /// List the sites crawled to the standard output
+    list_sites: bool,
+    #[clap(short, long, parse(from_os_str))]
+    /// List the sites crawled to the standard output
+    file: PathBuf,
+    #[clap(short = 't', long = "total")]
+    /// Print the total amount of sites crawled
+    print_total: bool,
 }
 
-pub(super) struct OtherOptions {
+/// Options of bin version of sitemap_generator, lib options are inside Options struct
+pub(super) struct BinOptions {
     pub(super) sites_to_analyze: HashSet<Url>,
     pub(super) starting_points: HashSet<Url>,
     pub(super) additional_links: Option<HashSet<Url>>,
+
+    pub(super) list_sites: bool,
+    pub(super) file: PathBuf,
+    pub(super) print_total: bool,
 }
 
 #[inline]
-pub(super) fn from_cli() -> (Options, OtherOptions) {
+pub(super) fn from_cli() -> (Options, BinOptions) {
     Input::parse().into()
 }
 
-impl From<Input> for (Options, OtherOptions) {
+impl From<Input> for (Options, BinOptions) {
     fn from(input: Input) -> Self {
         if input.sites_to_analyze.is_empty() {
             error("No domain has been provided.".to_string());
@@ -54,15 +73,27 @@ impl From<Input> for (Options, OtherOptions) {
             error("Concurrent tasks must be greater than zero.".to_string());
         }
 
-        let mut other_options = OtherOptions {
+        {
+            // Try to open input.file to make sure we can write to it.
+            let open_options = fs::OpenOptions::new().write(true).create_new(true).open(&input.file);
+            if open_options.is_err() {
+                error(format!("File {} cannot be opened.", input.file.display()));
+            }
+        }
+
+        let mut bin_options = BinOptions {
             sites_to_analyze: input.sites_to_analyze.iter().map(|str| sites_to_analyze_validator(str)).collect(),
             starting_points: input.starting_points.map_or(HashSet::new(), |vec| vec.iter().map(|str| url_validator(str)).collect()),
             additional_links: input.additional_links.map(|vec| vec.iter().map(|str| url_parser(str)).collect()),
+
+            list_sites: input.list_sites,
+            file: input.file,
+            print_total: input.print_total,
         };
-        other_options.sites_to_analyze.iter().for_each(|url| { other_options.starting_points.insert(url.clone()); });
+        bin_options.sites_to_analyze.iter().for_each(|url| { bin_options.starting_points.insert(url.clone()); });
 
         let options = Options::new(input.max_concurrent_tasks, input.remove_query_and_fragment, input.max_depth, input.verbose);
-        (options, other_options)
+        (options, bin_options)
     }
 }
 
