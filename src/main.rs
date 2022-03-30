@@ -19,14 +19,18 @@ fn main() {
     .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(bin_options.sites_to_analyze.into_iter()), options));
 
     let mut i = 0usize;
-    for site in sites {
-        i += 1; // sites is an iterator, cannot use len()
-        println!("{}", &*site);
-    }
+    if bin_options.list_sites {
+        for site in sites {
+            i += 1; // sites is an iterator, cannot use len()
+            println!("{}", &*site);
+        }
 
-    if let Some(additional_links) = bin_options.additional_links {
-        i += additional_links.len();
-        additional_links.iter().for_each(|site| println!("{}", site.as_str()));
+        if let Some(additional_links) = bin_options.additional_links {
+            i += additional_links.len();
+            additional_links.iter().for_each(|site| println!("{}", site.as_str()));
+        }
+    } else if bin_options.print_total {
+        i = sites.into_iter().count() + bin_options.additional_links.map_or(0usize, |links| links.len());
     }
 
     if bin_options.print_total {

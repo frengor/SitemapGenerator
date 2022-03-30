@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt::format;
 use std::fs;
 use std::path::PathBuf;
 
@@ -41,8 +40,8 @@ struct Input {
     /// List the sites crawled to the standard output
     list_sites: bool,
     #[clap(short, long, parse(from_os_str))]
-    /// List the sites crawled to the standard output
-    file: PathBuf,
+    /// The file in which the sitemap will be put
+    file: Option<PathBuf>,
     #[clap(short = 't', long = "total")]
     /// Print the total amount of sites crawled
     print_total: bool,
@@ -55,7 +54,7 @@ pub(super) struct BinOptions {
     pub(super) additional_links: Option<HashSet<Url>>,
 
     pub(super) list_sites: bool,
-    pub(super) file: PathBuf,
+    pub(super) file: Option<PathBuf>,
     pub(super) print_total: bool,
 }
 
@@ -73,11 +72,11 @@ impl From<Input> for (Options, BinOptions) {
             error("Concurrent tasks must be greater than zero.".to_string());
         }
 
-        {
+        if let Some(ref path) = input.file {
             // Try to open input.file to make sure we can write to it.
-            let open_options = fs::OpenOptions::new().write(true).create_new(true).open(&input.file);
+            let open_options = fs::OpenOptions::new().write(true).create_new(true).open(path);
             if open_options.is_err() {
-                error(format!("File {} cannot be opened.", input.file.display()));
+                error(format!("File {} cannot be opened.", path.display()));
             }
         }
 

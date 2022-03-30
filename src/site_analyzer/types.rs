@@ -71,6 +71,9 @@ impl Validator {
 
     pub fn is_valid(&self, url: &Url) -> bool {
         let str = url.as_str();
+        if !filter_http(url) {
+            return false;
+        }
         self.base_urls.iter().any(|base_url| {
             str.starts_with(base_url)
         })
