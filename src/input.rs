@@ -1,8 +1,12 @@
 use std::collections::HashSet;
 use std::fs;
+use std::fs::{DirEntry, ReadDir};
+use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::{CommandFactory, ErrorKind, Parser};
+use faccess::PathExt;
 use url::Url;
 
 use sitemap_generator::Options;
@@ -33,15 +37,23 @@ struct Input {
     /// Max depth of the crawl. Default value is 50
     max_depth: usize,
     #[clap(short, long)]
+    /// Whether to print verbose logging while crawling
     verbose: bool,
+    #[clap(long)]
+    /// If active, don't ask confirmations, just do it
+    force: bool,
 
     // Output options
     #[clap(short = 'l', long = "list")]
     /// List the sites crawled to the standard output
     list_sites: bool,
-    #[clap(short, long, parse(from_os_str))]
+    #[clap(short = 'F', long = "sitemap-file", group = "files", parse(from_os_str))]
     /// The file in which the sitemap will be put
-    file: Option<PathBuf>,
+    sitemap_path: Option<PathBuf>,
+    #[clap(short = 'D', long = "additional-dir", requires = "files", parse(from_os_str))]
+    /// The directory in which the additional sitemap files will be put if it is too big for one single file.
+    /// THE DIRECTORY WILL BE CLEARED. WATCH OUT!
+    additional_dir_path: Option<PathBuf>,
     #[clap(short = 't', long = "total")]
     /// Print the total amount of sites crawled
     print_total: bool,
@@ -54,8 +66,16 @@ pub(super) struct BinOptions {
     pub(super) additional_links: Option<HashSet<Url>>,
 
     pub(super) list_sites: bool,
-    pub(super) file: Option<PathBuf>,
+    pub(super) sitemap_file: Option<SitemapFileOptions>,
     pub(super) print_total: bool,
+}
+
+/// Sitemap file options
+pub(super) struct SitemapFileOptions {
+    /// Where the sitemap will be stored
+    pub(super) sitemap_path: PathBuf,
+    /// Where the additional sitemaps files will be stored if the sitemap is too big for one single file
+    pub(super) additional_dir_path: Option<PathBuf>,
 }
 
 #[inline]
@@ -72,13 +92,39 @@ impl From<Input> for (Options, BinOptions) {
             error("Concurrent tasks must be greater than zero.".to_string());
         }
 
-        if let Some(ref path) = input.file {
-            // Try to open input.file to make sure we can write to it.
-            let open_options = fs::OpenOptions::new().write(true).create_new(true).open(path);
-            if open_options.is_err() {
-                error(format!("File {} cannot be opened.", path.display()));
+        ask_no_selected_output(&input);
+
+        let file_opts = if let Some(path) = input.sitemap_path {
+            // Try to open input.sitemap_path to make sure we can write to it
+            if path.exists() && !path.writable() {
+                error(format!("File {} cannot be opened for writing. (insufficient permissions)", path.display()));
             }
-        }
+
+            // Try to open input.additional_dir_path to make sure we can read it
+            if let Some(path) = &input.additional_dir_path {
+                if path.exists() {
+                    if !path.is_dir() {
+                        error(format!(r#"Path "{}" is not a directory."#, path.display()));
+                    }
+                    match fs::read_dir(&path) {
+                        Ok(read_dir) => ask_directory_with_content(read_dir, input.force, path),
+                        Err(err) => error(format!(r#"Error reading directory "{}". ({})"#, path.display(), err.kind())),
+                    }
+
+                    if !path.writable() {
+                        error(format!("Directory {} cannot be opened for writing. (insufficient permissions)", path.display()));
+                    }
+                } else if let Err(err) = fs::create_dir_all(&path) {
+                    error(format!("Directory {} cannot be created. ({})", path.display(), err.kind()));
+                }
+            }
+            Some(SitemapFileOptions {
+                sitemap_path: path,
+                additional_dir_path: input.additional_dir_path,
+            })
+        } else {
+            None
+        };
 
         let mut bin_options = BinOptions {
             sites_to_analyze: input.sites_to_analyze.iter().map(|str| sites_to_analyze_validator(str)).collect(),
@@ -86,7 +132,7 @@ impl From<Input> for (Options, BinOptions) {
             additional_links: input.additional_links.map(|vec| vec.iter().map(|str| url_parser(str)).collect()),
 
             list_sites: input.list_sites,
-            file: input.file,
+            sitemap_file: file_opts,
             print_total: input.print_total,
         };
         bin_options.sites_to_analyze.iter().for_each(|url| { bin_options.starting_points.insert(url.clone()); });
@@ -135,6 +181,70 @@ fn sites_to_analyze_validator(url: &str) -> Url {
         check(sub_url.fragment());
     }
     site_to_analyze
+}
+
+fn ask_directory_with_content(mut read_dir: ReadDir, force: bool, additional_dir_path: &PathBuf) {
+    let first_content = read_dir.next();
+
+    fn empty_dir(file: std::io::Result<DirEntry>, read_dir: ReadDir) {
+        fn remove_file(path: PathBuf) {
+            match () {
+                () if path.is_file() || path.is_symlink() => {
+                    let _ = fs::remove_file(path);
+                },
+                () if path.is_dir() => {
+                    let _ = fs::remove_dir_all(path);
+                },
+                _ => {},
+            }
+        }
+        if let Ok(file) = file {
+            remove_file(file.path());
+        }
+        read_dir.for_each(|e| {
+            if let Ok(f) = e {
+                remove_file(f.path());
+            }
+        });
+    }
+
+    match first_content {
+        Some(elem) if force => empty_dir(elem, read_dir),
+        Some(elem) if !force => {
+            print!("Selected directory ({}) contains files, proceed? [Y/n] ", additional_dir_path.display());
+            let _ = stdout().flush();
+            confirmation();
+            empty_dir(elem, read_dir);
+        },
+        _ => {}, // Dir is already empty
+    }
+}
+
+fn ask_no_selected_output(input: &Input) {
+    if let (false, false, None, false) = (input.force, input.list_sites, &input.sitemap_path, input.print_total) {
+        print!("No output option has been selected, proceed? [Y/n] ");
+        let _ = stdout().flush();
+        confirmation();
+    }
+}
+
+/// Quits if user says "no"
+fn confirmation() {
+    let mut str = String::with_capacity(8 /*Just to be sure we don't reallocate for every input*/);
+    if let Err(err) = stdin().read_line(&mut str) {
+        eprintln!("Cannot get user input: {}", err.kind());
+        exit(1);
+    }
+    str.make_ascii_lowercase();
+    match str.trim() {
+        "" | "y" | "yes" => {
+            println!("Continuing...");
+        },
+        _ => {
+            println!("Aborting...");
+            exit(0);
+        },
+    }
 }
 
 #[test]

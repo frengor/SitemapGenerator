@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 #![forbid(unsafe_code)]
 
+use std::fs::File;
+use std::process::exit;
 pub use sitemap_generator::{Options, utils, Validator};
 
 mod input;
@@ -15,7 +17,7 @@ fn main() {
     .enable_all()
     .thread_name("SitemapGenerator")
     .build()
-    .expect("Failed building the Runtime")
+    .expect("Failed to build the Runtime")
     .block_on(sitemap_generator::analyze(sites_to_analyze.into_iter(), Validator::new(bin_options.sites_to_analyze.into_iter()), options));
 
     let mut i = 0usize;
@@ -31,6 +33,26 @@ fn main() {
         }
     } else if bin_options.print_total {
         i = sites.into_iter().count() + bin_options.additional_links.map_or(0usize, |links| links.len());
+    } else if let Some(sitemap_file) = bin_options.sitemap_file {
+        {
+            // Empty the file
+            if let Err(err) = File::create(&sitemap_file.sitemap_path) {
+                eprintln!("Cannot create file {}. ({})", sitemap_file.sitemap_path.display(), err.kind());
+                exit(1);
+            }
+        }
+        if let Ok(mut file) = File::options().append(true).open(&sitemap_file.sitemap_path) {
+            use std::io::Write;
+
+            sites.into_iter().for_each(|site| {
+                if let Err(err) = writeln!(file, "{}", site.as_str()) {
+                    eprintln!("Cannot write to file {}. ({})", sitemap_file.sitemap_path.display(), err.kind());
+                    exit(1);
+                }
+            });
+        } else {
+            eprintln!("Cannot open {}", sitemap_file.sitemap_path.display());
+        }
     }
 
     if bin_options.print_total {
